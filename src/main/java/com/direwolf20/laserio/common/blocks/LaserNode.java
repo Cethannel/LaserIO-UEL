@@ -7,6 +7,7 @@ import com.direwolf20.laserio.common.containers.customhandler.LaserNodeItemHandl
 import com.direwolf20.laserio.common.items.CardHolder;
 import com.direwolf20.laserio.common.items.LaserWrench;
 import com.direwolf20.laserio.common.items.cards.BaseCard;
+
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.network.chat.Component;
@@ -33,11 +34,14 @@ import net.minecraft.world.phys.shapes.CollisionContext;
 import net.minecraft.world.phys.shapes.VoxelShape;
 import net.minecraftforge.common.capabilities.ForgeCapabilities;
 import net.minecraftforge.common.util.LazyOptional;
+import net.minecraftforge.fml.ModList;
 import net.minecraftforge.items.IItemHandler;
 import net.minecraftforge.network.NetworkHooks;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
+
+import top.theillusivec4.curios.api.CuriosApi;
 
 public class LaserNode extends BaseLaserBlock implements EntityBlock {
     //This makes the shape fit the model perfectly, but introduces issues with clicking on specific sides of the block
@@ -80,12 +84,12 @@ public class LaserNode extends BaseLaserBlock implements EntityBlock {
     @Override
     public InteractionResult use(BlockState state, Level level, BlockPos pos, Player player, InteractionHand hand, BlockHitResult result) {
         ItemStack heldItem = player.getMainHandItem();
-        if (heldItem.getItem() instanceof LaserWrench)
+        if (heldItem.getItem() instanceof LaserWrench) {
             return InteractionResult.PASS;
+        }
         if (!level.isClientSide) {
             BlockEntity be = level.getBlockEntity(pos);
             if (be instanceof LaserNodeBE) {
-
                 if (heldItem.getItem() instanceof BaseCard) {
                     LazyOptional<IItemHandler> itemHandler = be.getCapability(ForgeCapabilities.ITEM_HANDLER, result.getDirection());
                     itemHandler.ifPresent(h -> {
@@ -94,13 +98,16 @@ public class LaserNode extends BaseLaserBlock implements EntityBlock {
                     });
                 } else {
                     Direction direction;
-                    if (player.isShiftKeyDown())
+                    if (player.isShiftKeyDown()) {
                         direction = result.getDirection().getOpposite();
-                    else
+                    } else {
                         direction = result.getDirection();
+                    }
                     be.getCapability(ForgeCapabilities.ITEM_HANDLER, direction).ifPresent(h -> {
-                        ItemStack cardHolder = findCardHolders(player);
-                        if (!cardHolder.isEmpty()) CardHolder.getUUID(cardHolder);
+                        ItemStack cardHolder = findFirstCardHolder(player);
+                        if (!cardHolder.isEmpty()) {
+                            CardHolder.getUUID(cardHolder);
+                        }
                         MenuProvider containerProvider = new MenuProvider() {
                             @Override
                             public Component getDisplayName() {
@@ -112,7 +119,6 @@ public class LaserNode extends BaseLaserBlock implements EntityBlock {
                                 return new LaserNodeContainer((LaserNodeBE) be, windowId, (byte) direction.ordinal(), playerInventory, playerEntity, (LaserNodeItemHandler) h, ContainerLevelAccess.create(be.getLevel(), be.getBlockPos()), cardHolder);
                             }
                         };
-
                         NetworkHooks.openScreen((ServerPlayer) player, containerProvider, (buf -> {
                             buf.writeBlockPos(pos);
                             buf.writeByte((byte) direction.ordinal());
@@ -123,32 +129,38 @@ public class LaserNode extends BaseLaserBlock implements EntityBlock {
             } else {
                 throw new IllegalStateException("Our named container provider is missing!");
             }
-
         }
         return InteractionResult.SUCCESS;
     }
 
     /** Custom Implementation of ItemHandlerHelper.insertItem for right clicking nodes with **/
     public static ItemStack insertItemToNode(IItemHandler dest, @Nonnull ItemStack stack, boolean simulate) {
-        if (dest == null || stack.isEmpty())
+        if (dest == null || stack.isEmpty()) {
             return stack;
-
+        }
         for (int i = 0; i < LaserNodeContainer.CARDSLOTS; i++) {
             stack = dest.insertItem(i, stack, simulate);
             if (stack.isEmpty()) {
                 return ItemStack.EMPTY;
             }
         }
-
         return stack;
     }
 
-    public static ItemStack findCardHolders(Player player) {
+    public static ItemStack findFirstCardHolder(Player player) {
         ItemStack cardHolder = ItemStack.EMPTY;
-        Inventory playerInventory = player.getInventory();
-        for (int i = 0; i < playerInventory.items.size(); i++) {
-            ItemStack itemStack = playerInventory.items.get(i);
-            if (itemStack.getItem() instanceof CardHolder) return itemStack;
+        if (ModList.get().isLoaded("curios")) {
+            cardHolder = CuriosApi.getCuriosInventory(player).map(inv -> inv.findFirstCurio(stack -> stack.getItem() instanceof CardHolder).map(result -> result.stack()).orElse(ItemStack.EMPTY)).orElse(ItemStack.EMPTY);
+        }
+        if (cardHolder.isEmpty()) {
+            Inventory playerInventory = player.getInventory();
+            for (int i = 0; i < playerInventory.items.size(); i++) {
+                ItemStack possibleCardHolder = playerInventory.items.get(i);
+                if (possibleCardHolder.getItem() instanceof CardHolder) {
+                    cardHolder = possibleCardHolder;
+                    break;
+                }
+            }
         }
         return cardHolder;
     }
@@ -194,8 +206,9 @@ public class LaserNode extends BaseLaserBlock implements EntityBlock {
     public boolean canConnectRedstone(BlockState state, BlockGetter level, BlockPos pos, @Nullable Direction direction) {
         BlockEntity blockEntity = level.getBlockEntity(pos);
         if (blockEntity instanceof LaserNodeBE laserNodeBE) {
-            if ((direction == null) || !laserNodeBE.redstoneCardSides.containsKey((byte) direction.getOpposite().ordinal()))
+            if ((direction == null) || !laserNodeBE.redstoneCardSides.containsKey((byte) direction.getOpposite().ordinal())) {
                 return false;
+            }
             return laserNodeBE.redstoneCardSides.get((byte) direction.getOpposite().ordinal());
         }
         return false;
@@ -251,7 +264,6 @@ public class LaserNode extends BaseLaserBlock implements EntityBlock {
                     });
                 }
             }
-
         }
         super.onRemove(state, worldIn, pos, newState, isMoving);
     }

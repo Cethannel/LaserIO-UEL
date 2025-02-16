@@ -273,10 +273,8 @@ public class LaserNodeBE extends BaseLaserBE {
                             if (sendFluids(extractorCardCache))
                                 countCardsHandled++;
                         } else if (extractorCardCache.cardType.equals(BaseCard.CardType.ENERGY)) {
-                            if (sendEnergy(extractorCardCache)) {
+                            if (sendEnergy(extractorCardCache))
                                 countCardsHandled++;
-                                extractorCardCache.externallyManaged = false;
-                            }
                         } else if (extractorCardCache.cardType.equals(BaseCard.CardType.CHEMICAL)) {
                             if (mekanismCache.sendChemicals(extractorCardCache))
                                 countCardsHandled++;
@@ -1211,16 +1209,17 @@ public class LaserNodeBE extends BaseLaserBE {
         for (ExtractorCardCache extractorCardCache : nodeSideCache.extractorCardCaches) {
             if (extractorCardCache.remainingSleep > 1) continue;
             if (!extractorCardCache.enabled) continue;
-            if (extractorCardCache.externallyManaged && simulate) continue;
+            if (extractorCardCache.energyReceivedExternally >= extractorCardCache.extractAmt) continue;
             if (countCardsHandled > nodeSideCache.overclockers) return totalAmtSent;
             if (extractorCardCache instanceof StockerCardCache) {
                 //No-Op
             } else {
                 if (extractorCardCache.cardType.equals(BaseCard.CardType.ENERGY)) {
                     int amtSent = sendReceivedEnergy(extractorCardCache, totalAmtNeeded, simulate);
-                    if (amtSent > 0) {
-                        countCardsHandled++;
-                        extractorCardCache.externallyManaged = true;
+                    if (amtSent <= 0) continue;
+                    countCardsHandled++;
+                    if (!simulate) {
+                        extractorCardCache.energyReceivedExternally += amtSent;
                     }
                     totalAmtNeeded -= amtSent;
                     totalAmtSent += amtSent;
@@ -1234,7 +1233,10 @@ public class LaserNodeBE extends BaseLaserBE {
     }
 
     public int sendReceivedEnergy(ExtractorCardCache extractorCardCache, int receiveAmt, boolean simulate) {
-        int totalAmtNeeded = Math.min(extractorCardCache.extractAmt, receiveAmt);
+        int totalAmtNeeded = Math.min(extractorCardCache.extractAmt - extractorCardCache.energyReceivedExternally, receiveAmt);
+        if (totalAmtNeeded <= 0) {
+            return 0;
+        }
         int totalFit = 0;
         List<InserterCardCache> inserterCardCaches = getChannelMatchInserters(extractorCardCache);
         int roundRobin = -1;
@@ -1245,15 +1247,13 @@ public class LaserNodeBE extends BaseLaserBE {
         for (InserterCardCache inserterCardCache : inserterCardCaches) {
             LaserNodeEnergyHandler laserNodeEnergyHandler = getLaserNodeHandlerEnergy(inserterCardCache);
             if (laserNodeEnergyHandler == null) continue;
-            BlockEntity targetBE = level.getBlockEntity(laserNodeEnergyHandler.be.getBlockPos().relative(inserterCardCache.direction));
-            if (targetBE instanceof LaserNodeBE)
-                continue; //Don't let laser nodes insert into other laser nodes in this way.
             IEnergyStorage energyStorage = laserNodeEnergyHandler.handler;
             int desired;
-            if (inserterCardCache.insertLimit != 100)
+            if (inserterCardCache.insertLimit != 100) {
                 desired = (int) (energyStorage.getMaxEnergyStored() * ((float) inserterCardCache.insertLimit / 100)) - energyStorage.getEnergyStored();
-            else
+            } else {
                 desired = receiveAmt;
+            }
             if (desired <= 0) continue;
             int amtToTry = Math.min(desired, totalAmtNeeded);
             int amtFit = energyStorage.receiveEnergy(amtToTry, true); //Simulate Insert Energy
@@ -1266,8 +1266,7 @@ public class LaserNodeBE extends BaseLaserBE {
             }
             totalAmtNeeded -= amtFit; //If we removed 100 and wanted to remove 1000, keep looking for other nodes to insert into
             totalFit += amtFit;
-            if (!simulate)
-                energyStorage.receiveEnergy(amtFit, false); //Insert the amount we removed from the source
+            if (!simulate) energyStorage.receiveEnergy(amtFit, false); //Insert the amount we removed from the source
             //drawParticlesFluid(drainedStack, extractorCardCache.direction, extractorCardCache.be, inserterCardCache.be, inserterCardCache.direction, extractorCardCache.cardSlot, inserterCardCache.cardSlot);
             if (extractorCardCache.roundRobin != 0) getNextRR(extractorCardCache, inserterCardCaches);
             if (totalAmtNeeded == 0) return totalFit;
@@ -1366,7 +1365,8 @@ public class LaserNodeBE extends BaseLaserBE {
 
     /** Extractor Cards call this, and try to find an inserter card to send their items to **/
     public boolean sendEnergy(ExtractorCardCache extractorCardCache) {
-        if (extractorCardCache.externallyManaged) {
+        if (extractorCardCache.energyReceivedExternally != 0) {
+            extractorCardCache.energyReceivedExternally = 0;
             return true;
         }
         BlockPos adjacentPos = getBlockPos().relative(extractorCardCache.direction);
@@ -2405,15 +2405,17 @@ public class LaserNodeBE extends BaseLaserBE {
                         enabled = (channelStrength >= (CardRedstone.getThreshold(card) ? CardRedstone.getThresholdLimit(card) : 1));
                     } else {
                         byte logicOperationChannelStrength = redstoneNetwork.get(CardRedstone.getRedstoneChannelOperation(card));
-                        enabled = switch(CardRedstone.getLogicOperation(card)) {
-                            case 1 -> ((channelStrength + logicOperationChannelStrength) > 0); //OR
-                            case 2 -> ((channelStrength * logicOperationChannelStrength) > 0); //AND
-                            case 3 -> ((channelStrength > 0) ^ (logicOperationChannelStrength > 0)); //XOR
+                        channelStrength = switch(CardRedstone.getLogicOperation(card)) {
+                            case 1 -> (byte) (((channelStrength + logicOperationChannelStrength) > 0) ? 15 : 0); //OR
+                            case 2 -> (byte) (((channelStrength * logicOperationChannelStrength) > 0) ? 15 : 0); //AND
+                            case 3 -> (byte) (((channelStrength > 0) ^ (logicOperationChannelStrength > 0)) ? 15 : 0); //XOR
+                            default -> channelStrength;
+                        };
+                        enabled = switch(CardRedstone.getOutputMode(card)) {
+                            case 1 -> (channelStrength != 15); //Complementary
+                            case 2 -> (channelStrength == 0); //NOT
                             default -> (channelStrength > 0);
                         };
-                        if (CardRedstone.getOutputMode(card) != 0) {
-                            enabled = !enabled; //Complementary or NOT
-                        }
                     }
                 } else {
                     byte redstoneMode = BaseCard.getRedstoneMode(card);

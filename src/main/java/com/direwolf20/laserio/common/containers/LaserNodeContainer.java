@@ -29,9 +29,8 @@ import javax.annotation.Nullable;
 import java.util.UUID;
 
 public class LaserNodeContainer extends AbstractContainerMenu {
-    public static int SLOTS = 25;
-    public static final int CARDHOLDERSLOTS = 15;
     public static final int CARDSLOTS = 9;
+    public static final int SLOTS = CARDSLOTS + 1; //One slot is for Node Overclockers
     public Player playerEntity;
     private IItemHandler playerInventory;
     ContainerLevelAccess containerLevelAccess;
@@ -39,7 +38,7 @@ public class LaserNodeContainer extends AbstractContainerMenu {
     public IItemHandler cardHolderHandler;
     public UUID cardHolderUUID;
 
-    // Tile can be null and shouldn't be used for accessing any data that needs to be up to date on both sides
+    //Tile can be null and shouldn't be used for accessing any data that needs to be up to date on both sides
     public LaserNodeBE tile;
     public byte side;
 
@@ -59,11 +58,11 @@ public class LaserNodeContainer extends AbstractContainerMenu {
             addSlotRange(handler, 9, 152, 78, 1, 18);
         }
         this.cardHolder = cardHolder;
-
-        this.cardHolderHandler = cardHolder.getCapability(ForgeCapabilities.ITEM_HANDLER, null).orElse(new ItemStackHandler(CardHolderContainer.SLOTS));
-        addSlotBox(cardHolderHandler, 0, -92, 32, 5, 18, 3, 18);
-        cardHolderUUID = CardHolder.getUUID(cardHolder);
-
+        if (!cardHolder.isEmpty()) {
+            this.cardHolderHandler = cardHolder.getCapability(ForgeCapabilities.ITEM_HANDLER, null).orElse(new ItemStackHandler(CardHolderContainer.SLOTS));
+            addSlotBox(cardHolderHandler, 0, -92, 32, 5, 18, 3, 18);
+            cardHolderUUID = CardHolder.getUUID(cardHolder);
+        }
         layoutPlayerInventorySlots(8, 99);
     }
 
@@ -72,14 +71,14 @@ public class LaserNodeContainer extends AbstractContainerMenu {
         if (slotId >= 0) {
             Slot slot = slots.get(slotId);
             ItemStack stackInSlot = slot.getItem();
-            if (slotId < SLOTS && slot instanceof CardHolderSlot) {
+            if (slot instanceof CardHolderSlot) {
                 if (stackInSlot.getMaxStackSize() == 1 && stackInSlot.getCount() > 1) {
                     ItemStack carriedItem = getCarried();
                     if (!carriedItem.isEmpty() && !stackInSlot.isEmpty() && !ItemStack.isSameItemSameTags(carriedItem, stackInSlot)) {
                         return;
                     }
                 }
-            } else if (stackInSlot.getItem() instanceof CardHolder) {
+            } else if (stackInSlot.getItem() instanceof CardHolder && CardHolder.getUUID(stackInSlot).equals(cardHolderUUID)) {
                 return;
             }
         }
@@ -88,17 +87,9 @@ public class LaserNodeContainer extends AbstractContainerMenu {
 
     @Override
     public boolean stillValid(Player playerIn) {
-        if (cardHolder.isEmpty() && cardHolderUUID != null) {
-            //System.out.println("Lost card holder!");
-            Inventory playerInventory = playerEntity.getInventory();
-            for (int i = 0; i < playerInventory.items.size(); i++) {
-                ItemStack itemStack = playerInventory.items.get(i);
-                if (itemStack.getItem() instanceof CardHolder) {
-                    if (CardHolder.getUUID(itemStack).equals(cardHolderUUID)) {
-                        cardHolder = itemStack;
-                        break;
-                    }
-                }
+        if (cardHolderUUID != null) {
+            if (!(cardHolder.getItem() instanceof CardHolder) || !CardHolder.getUUID(cardHolder).equals(cardHolderUUID)) {
+                return false;
             }
         }
         return stillValid(containerLevelAccess, playerEntity, Registration.LaserNode.get());
@@ -195,19 +186,20 @@ public class LaserNodeContainer extends AbstractContainerMenu {
 
     @Override
     public ItemStack quickMoveStack(Player playerIn, int index) {
-        ItemStack itemstack = ItemStack.EMPTY;
+        ItemStack itemStack = ItemStack.EMPTY;
         Slot slot = this.slots.get(index);
         ItemStack stack = slot.getItem();
         if (slot instanceof CardHolderSlot) { //If we click on a cardHolder slot
             ItemStack stackToMove;
-            if (stack.getMaxStackSize() == 1)
+            if (stack.getMaxStackSize() == 1) {
                 stackToMove = stack.split(1);
-            else
+            } else {
                 stackToMove = stack;
+            }
             //Try to move 1 card to the node slots first, failing that, to the inventory!
-            if (this.moveItemStackTo(stackToMove, 0, CARDSLOTS+1, false)) {
+            if (this.moveItemStackTo(stackToMove, 0, SLOTS, false)) {
                 return ItemStack.EMPTY;
-            } else if (this.moveItemStackTo(stackToMove, SLOTS, 36 + SLOTS, true)) {
+            } else if (this.moveItemStackTo(stackToMove, (SLOTS + CardHolderContainer.SLOTS), (36 + SLOTS + CardHolderContainer.SLOTS), true)) {
                 return ItemStack.EMPTY;
             } else {
                 stack.grow(1);
@@ -215,39 +207,39 @@ public class LaserNodeContainer extends AbstractContainerMenu {
             }
         } else if (index < CARDSLOTS) { //If its a node CARD slot
             if (!cardHolder.isEmpty()) { //Do the below set of logic if we have a card holder, otherwise just try to move to inventory
-                if (this.moveItemStackTo(stack, CARDSLOTS + 1, SLOTS, false)) { //Move to card holder
+                if (this.moveItemStackTo(stack, SLOTS, (SLOTS + CardHolderContainer.SLOTS), false)) { //Move to card holder
                     if (!playerIn.level().isClientSide() && !(tile == null)) {
                         tile.updateThisNode();
                     }
                     return ItemStack.EMPTY;
-                } else if (super.moveItemStackTo(stack, SLOTS, 36 + SLOTS, true)) { //Move to inventory
+                } else if (super.moveItemStackTo(stack, (SLOTS + CardHolderContainer.SLOTS), (36 + SLOTS + CardHolderContainer.SLOTS), true)) { //Move to inventory
                     if (!playerIn.level().isClientSide() && !(tile == null)) {
                         tile.updateThisNode();
                     }
                     return ItemStack.EMPTY;
                 }
             } else {
-                if (super.moveItemStackTo(stack, SLOTS, 36 + SLOTS, true)) { //Move to inventory
+                if (super.moveItemStackTo(stack, SLOTS, (36 + SLOTS), true)) { //Move to inventory
                     if (!playerIn.level().isClientSide() && !(tile == null)) {
                         tile.updateThisNode();
                     }
                     return ItemStack.EMPTY;
                 }
             }
-        } else { //If its not a cardHolder slot nor a Card slot in the node - it must be the overclocker slot or the inventory....
+        } else { //If its not a cardHolder slot nor a Card slot in the node - it must be the Node Overclocker slot or the inventory...
             if (stack.getItem() instanceof OverclockerNode) {
-                itemstack = stack.copy();
+                itemStack = stack.copy();
                 //If its one of the 9 slots at the top try to move it into your inventory
                 if (!cardHolder.isEmpty()) { //Do the below set of logic if we have a card holder, otherwise just try to move to inventory
-                    if (index < SLOTS) {
-                        if (this.moveItemStackTo(stack, CARDSLOTS + 1, SLOTS, false)) { //Move to card holder
+                    if (index < (SLOTS + CardHolderContainer.SLOTS)) {
+                        if (this.moveItemStackTo(stack, SLOTS, (SLOTS + CardHolderContainer.SLOTS), false)) { //Move to card holder
                             return ItemStack.EMPTY;
-                        } else if (!super.moveItemStackTo(stack, SLOTS, 36 + SLOTS, true)) {
+                        } else if (!super.moveItemStackTo(stack, (SLOTS + CardHolderContainer.SLOTS), (36 + SLOTS + CardHolderContainer.SLOTS), true)) {
                             return ItemStack.EMPTY;
                         }
-                        slot.onQuickCraft(stack, itemstack);
+                        slot.onQuickCraft(stack, itemStack);
                     } else {
-                        if (!super.moveItemStackTo(stack, 0, SLOTS - CARDHOLDERSLOTS, false)) {
+                        if (!super.moveItemStackTo(stack, 0, SLOTS, false)) {
                             return ItemStack.EMPTY;
                         }
                         if (!playerIn.level().isClientSide() && !(tile == null)) {
@@ -256,12 +248,12 @@ public class LaserNodeContainer extends AbstractContainerMenu {
                     }
                 } else {
                     if (index < SLOTS) {
-                        if (!super.moveItemStackTo(stack, SLOTS, 36 + SLOTS, true)) {
+                        if (!super.moveItemStackTo(stack, SLOTS , (36 + SLOTS), true)) {
                             return ItemStack.EMPTY;
                         }
-                        slot.onQuickCraft(stack, itemstack);
+                        slot.onQuickCraft(stack, itemStack);
                     } else {
-                        if (!super.moveItemStackTo(stack, 0, SLOTS - CARDHOLDERSLOTS, false)) {
+                        if (!super.moveItemStackTo(stack, 0, SLOTS, false)) {
                             return ItemStack.EMPTY;
                         }
                         if (!playerIn.level().isClientSide() && !(tile == null)) {
@@ -276,17 +268,17 @@ public class LaserNodeContainer extends AbstractContainerMenu {
                     slot.setChanged();
                 }
 
-                if (stack.getCount() == itemstack.getCount()) {
+                if (stack.getCount() == itemStack.getCount()) {
                     return ItemStack.EMPTY;
                 }
 
                 slot.onTake(playerIn, stack);
-                return itemstack;
-            } else if (stack.getItem() instanceof BaseCard || stack.getItem() instanceof BaseFilter || stack.getItem() instanceof OverclockerCard) { //If its a baseCard - it must be in the inventory, since these don't fit in the other slot....
+                return itemStack;
+            } else if (stack.getItem() instanceof BaseCard || stack.getItem() instanceof BaseFilter || stack.getItem() instanceof OverclockerCard) { //If it's a BaseCard - it must be in the inventory, since these don't fit in the other slot...
                 if (!cardHolder.isEmpty()) { //Do the below set of logic if we have a card holder, otherwise just try to move to inventory
                     if (super.moveItemStackTo(stack, 0, CARDSLOTS, false))
                         return ItemStack.EMPTY;
-                    else if (this.moveItemStackTo(stack, CARDSLOTS + 1, SLOTS, false)) //Move to Card Holder
+                    else if (this.moveItemStackTo(stack, SLOTS, (SLOTS + CardHolderContainer.SLOTS), false)) //Move to Card Holder
                         return ItemStack.EMPTY;
                 } else {
                     if (super.moveItemStackTo(stack, 0, CARDSLOTS, false)) //Move to node
@@ -301,9 +293,9 @@ public class LaserNodeContainer extends AbstractContainerMenu {
 
     private int addSlotRange(IItemHandler handler, int index, int x, int y, int amount, int dx) {
         for (int i = 0; i < amount; i++) {
-            if (handler instanceof LaserNodeItemHandler && index < 9)
+            if (handler instanceof LaserNodeItemHandler && index < CARDSLOTS)
                 addSlot(new LaserNodeSlot(handler, index, x, y));
-            else if ((handler.getSlots() == CardHolderContainer.SLOTS))
+            else if (handler.getSlots() == CardHolderContainer.SLOTS)
                 addSlot(new CardHolderSlot(handler, index, x, y));
             else
                 addSlot(new SlotItemHandler(handler, index, x, y));

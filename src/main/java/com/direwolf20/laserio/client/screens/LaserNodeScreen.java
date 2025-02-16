@@ -8,7 +8,6 @@ import com.direwolf20.laserio.common.containers.LaserNodeContainer;
 import com.direwolf20.laserio.common.containers.customslot.CardHolderSlot;
 import com.direwolf20.laserio.common.containers.customslot.LaserNodeSlot;
 import com.direwolf20.laserio.common.items.CardCloner;
-import com.direwolf20.laserio.common.items.CardHolder;
 import com.direwolf20.laserio.common.items.cards.BaseCard;
 import com.direwolf20.laserio.common.network.PacketHandler;
 import com.direwolf20.laserio.common.network.packets.PacketCopyPasteCard;
@@ -68,7 +67,7 @@ public class LaserNodeScreen extends AbstractContainerScreen<LaserNodeContainer>
         super(container, inv, name);
         this.container = container;
         this.imageHeight = 181;
-        showCardHolderUI = container.cardHolder.isEmpty();
+        showCardHolderUI = !container.cardHolder.isEmpty();
         this.currentParticles = container.tile.getShowParticles();
     }
 
@@ -95,7 +94,6 @@ public class LaserNodeScreen extends AbstractContainerScreen<LaserNodeContainer>
         for (int i = 0; i < leftWidgets.size(); i++) {
             addRenderableWidget(leftWidgets.get(i));
         }
-
     }
 
     @Override
@@ -107,8 +105,8 @@ public class LaserNodeScreen extends AbstractContainerScreen<LaserNodeContainer>
 
     @Override
     public void render(GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTicks) {
-        validateHolder();
         this.renderBackground(guiGraphics);
+        toggleHolderSlots();
         super.render(guiGraphics, mouseX, mouseY, partialTicks);
         this.renderTooltip(guiGraphics, mouseX, mouseY);
         if (MiscTools.inBounds(particlesButton.getX(), particlesButton.getY(), particlesButton.getWidth(), particlesButton.getHeight(), mouseX, mouseY)) {
@@ -161,25 +159,8 @@ public class LaserNodeScreen extends AbstractContainerScreen<LaserNodeContainer>
         }
     }
 
-    public boolean validateHolder() {
-        Inventory playerInventory = container.playerEntity.getInventory();
-        for (int i = 0; i < playerInventory.items.size(); i++) {
-            ItemStack itemStack = playerInventory.items.get(i);
-            if (itemStack.getItem() instanceof CardHolder) {
-                if (CardHolder.getUUID(itemStack).equals(container.cardHolderUUID)) {
-                    showCardHolderUI = true;
-                    toggleHolderSlots();
-                    return true;
-                }
-            }
-        }
-        showCardHolderUI = false;
-        toggleHolderSlots();
-        return false;
-    }
-
     public void toggleHolderSlots() {
-        for (int i = 10; i < 10 + CardHolderContainer.SLOTS; i++) {
+        for (int i = LaserNodeContainer.CARDSLOTS; i < (LaserNodeContainer.CARDSLOTS + CardHolderContainer.SLOTS); i++) {
             if (i >= container.slots.size()) continue;
             Slot slot = container.getSlot(i);
             if (!(slot instanceof CardHolderSlot)) continue;
@@ -190,12 +171,11 @@ public class LaserNodeScreen extends AbstractContainerScreen<LaserNodeContainer>
     @Override
     public boolean mouseClicked(double x, double y, int btn) {
         if (hoveredSlot != null && container.getCarried().getItem() instanceof CardCloner) {
-            if (hoveredSlot instanceof LaserNodeSlot && !hoveredSlot.getItem().isEmpty())
-            if (btn == 0) { //Left click
-                PacketHandler.sendToServer(new PacketCopyPasteCard(hoveredSlot.getSlotIndex(), true));
-            }
-            if (btn == 1) { //Right click
-                PacketHandler.sendToServer(new PacketCopyPasteCard(hoveredSlot.getSlotIndex(), false));
+            if (hoveredSlot instanceof LaserNodeSlot && !hoveredSlot.getItem().isEmpty()) {
+                if (btn == 0) //Left click
+                    PacketHandler.sendToServer(new PacketCopyPasteCard(hoveredSlot.getSlotIndex(), true));
+                else if (btn == 1) //Right click
+                    PacketHandler.sendToServer(new PacketCopyPasteCard(hoveredSlot.getSlotIndex(), false));
             }
             return true;
         }
@@ -229,10 +209,9 @@ public class LaserNodeScreen extends AbstractContainerScreen<LaserNodeContainer>
             Minecraft.getInstance().getSoundManager().play(SimpleSoundInstance.forUI(SoundEvents.UI_BUTTON_CLICK, 1.0F));
             return true;
         }
-
-        if (hoveredSlot == null || hoveredSlot.getItem().isEmpty() || !(hoveredSlot.getItem().getItem() instanceof BaseCard))
+        if (hoveredSlot == null || hoveredSlot.getItem().isEmpty() || !(hoveredSlot.getItem().getItem() instanceof BaseCard)) {
             return super.mouseClicked(x, y, btn);
-
+        }
         if (btn == 1 && hoveredSlot instanceof LaserNodeSlot) { //Right click
             int slot = hoveredSlot.getSlotIndex();
             PacketHandler.sendToServer(new PacketOpenCard(slot, container.tile.getBlockPos(), hasShiftDown()));

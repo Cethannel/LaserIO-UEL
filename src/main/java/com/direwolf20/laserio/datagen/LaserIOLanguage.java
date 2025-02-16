@@ -1,20 +1,20 @@
 package com.direwolf20.laserio.datagen;
 
 import com.direwolf20.laserio.common.LaserIO;
+import com.direwolf20.laserio.setup.ModSetup;
 import com.direwolf20.laserio.setup.Registration;
 import net.minecraft.data.PackOutput;
 import net.minecraftforge.common.data.LanguageProvider;
 
-import static com.direwolf20.laserio.setup.ModSetup.TAB_NAME;
-
-public class LaserIOLanguageProvider extends LanguageProvider {
-    public LaserIOLanguageProvider(PackOutput output, String locale) {
+public class LaserIOLanguage extends LanguageProvider {
+    public LaserIOLanguage(PackOutput output, String locale) {
         super(output, LaserIO.MODID, locale);
     }
 
     @Override
     protected void addTranslations() {
-        add("itemGroup." + TAB_NAME, "LaserIO");
+        //Items and blocks names
+        add("itemGroup." + ModSetup.TAB_NAME, LaserIO.MODNAME);
         add(Registration.LaserConnector.get(), "Laser Connector");
         add(Registration.LaserConnectorAdv.get(), "Advanced Laser Connector");
         add(Registration.LaserNode.get(), "Laser Node");
@@ -36,6 +36,7 @@ public class LaserIOLanguageProvider extends LanguageProvider {
         add(Registration.Overclocker_Node.get(), "Node Overclocker");
         add(Registration.Logistic_Overclocker_Card.get(), "Logistic Overclocker");
 
+        //Screens informations
         add("screen.laserio.extractamt", "Transfer Amount");
         add("screen.laserio.tickSpeed", "Speed (Ticks)");
 
@@ -101,9 +102,7 @@ public class LaserIOLanguageProvider extends LanguageProvider {
         add("screen.laserio.nbttrue", "Match NBT");
         add("screen.laserio.nbtfalse", "Ignore NBT");
 
-        add("message.laserio.wrenchrange", "Connection exceeds maximum range of %d");
-
-        //Card Tooltips
+        //Cards tooltips
         add("laserio.tooltip.item.show_settings", "Hold shift to show settings");
         add("laserio.tooltip.item.card.mode", "Mode: ");
         add("laserio.tooltip.item.card.channel", "Channel: ");
@@ -119,19 +118,32 @@ public class LaserIOLanguageProvider extends LanguageProvider {
         add("laserio.tooltip.item.card.sneaky.WEST", "West");
         add("laserio.tooltip.item.card.sneaky.EAST", "East");
         add("laserio.tooltip.item.card.Filter", "Filter: ");
+        add("laserio.tooltip.item.card.Overclocker", "Overclocker: ");
         add("laserio.tooltip.item.card.Overclockers", "Overclockers: ");
         add("laserio.tooltip.item.card.None", "None");
 
-        //Energy Overclockers Tooltip
-        add("laserio.tooltip.item.energy_overclocker.max_fe", "Max %d FE/t");
+        //Energy Overclockers tooltip
+        add("laserio.tooltip.item.energy_overclocker.max_fe", "Max %d FE/operation");
 
-        //Filter Tooltips
+        //Filters tooltips
         add("laserio.tooltip.item.filter.type", "Type: ");
         add("laserio.tooltip.item.filter.type.allow", "Allow");
         add("laserio.tooltip.item.filter.type.deny", "Deny");
         add("laserio.tooltip.item.filter.nbt", "Match NBT: ");
         add("laserio.tooltip.item.filter.nbt.allow", "True");
         add("laserio.tooltip.item.filter.nbt.deny", "False");
+
+        //Client messages
+        add("message.laserio.wrenchrange", "Connection exceeds maximum range of %d");
+        add("message.laserio.card_holder_pulling_enabled", "Card Holder pulling enabled");
+        add("message.laserio.card_holder_pulling_disabled", "Card Holder pulling disabled");
+
+        //Keybinds
+        add("key.laserio.open_card_holder", "Open Card Holder");
+        add("key.laserio.toggle_card_holder_pulling", "Toggle Card Holder Pulling");
+
+        //Curios Card Holder slot
+        add("curios.identifier.card_holder", "Card Holder");
 
         //add("", "");
     }
